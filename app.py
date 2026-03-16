@@ -96,7 +96,7 @@ def detect_mime_type(filename: str) -> str:
 
 
 async def embed_item(
-    item: dict, dimensions: int
+    item: dict, dimensions: int, task_type: Optional[str] = None
 ) -> dict:
     """
     Embed a single item. Returns dict with label, type, and embedding values.
@@ -104,8 +104,13 @@ async def embed_item(
     item format:
       {"type": "text", "value": "some text"}
       {"type": "file", "filename": "cat.jpg", "data": <bytes>}
+
+    task_type: optional Gemini task type (e.g. "RETRIEVAL_DOCUMENT", "RETRIEVAL_QUERY")
     """
-    config = types.EmbedContentConfig(output_dimensionality=dimensions)
+    config = types.EmbedContentConfig(
+        output_dimensionality=dimensions,
+        task_type=task_type,
+    )
 
     if item["type"] == "text":
         result = client.models.embed_content(
@@ -339,7 +344,7 @@ async def search(
 
     # Embed query
     try:
-        result = await embed_item(item, dims)
+        result = await embed_item(item, dims, task_type="RETRIEVAL_QUERY")
     except Exception as e:
         raise HTTPException(500, f"Query embedding failed: {str(e)}")
 

@@ -448,6 +448,31 @@
       text-align: right;
     }
 
+    .modality-filters {
+      display: flex;
+      gap: 0.35rem;
+      margin-bottom: 1rem;
+    }
+
+    .modality-filter {
+      font-size: 0.7rem;
+      font-family: var(--mono);
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      padding: 0.3rem 0.65rem;
+      cursor: pointer;
+      transition: all 0.15s;
+      color: var(--text-muted);
+    }
+
+    .modality-filter:hover { border-color: var(--accent); color: var(--text); }
+    .modality-filter.active {
+      background: var(--accent-glow);
+      border-color: var(--accent);
+      color: var(--accent);
+    }
+
     @media (max-width: 768px) {
       .search-input-row { flex-direction: column; }
       .search-drop-zone { width: 100%; min-height: 60px; }
@@ -783,6 +808,7 @@
         <h2>Search Results</h2>
         <span class="results-meta" id="searchResultsMeta"></span>
       </div>
+      <div class="modality-filters" id="modalityFilters"></div>
       <div id="searchResultsList"></div>
     </div>
   </div>
@@ -797,6 +823,8 @@
     let sampleFiles = [];
     let currentMode = 'search';
     let searchFile = null;
+    let searchResultsData = null;
+    let activeModalityFilter = 'all';
 
     // ── Init ──
     async function init() {
@@ -1189,16 +1217,65 @@
     }
 
     function renderSearchResults(data) {
-      const el = document.getElementById("searchResults");
-      const list = document.getElementById("searchResultsList");
-      const meta = document.getElementById("searchResultsMeta");
+      searchResultsData = data;
+      activeModalityFilter = 'all';
 
+      const el = document.getElementById("searchResults");
       el.classList.add("visible");
       el.dataset.wasVisible = "true";
-      meta.textContent = 'Query: "' + data.query_label + '" (' + data.query_modality + ') \u00b7 ' + data.dimensions + 'd';
+      document.getElementById("searchResultsMeta").textContent =
+        'Query: "' + data.query_label + '" (' + data.query_modality + ') \u00b7 ' + data.dimensions + 'd';
 
+      // Build filter chips from modalities present in results
+      const modalities = [...new Set(data.results.map(r => r.modality))];
+      const filtersEl = document.getElementById("modalityFilters");
+      filtersEl.textContent = "";
+      if (modalities.length > 1) {
+        const allBtn = document.createElement("button");
+        allBtn.className = "modality-filter active";
+        allBtn.textContent = "All";
+        allBtn.addEventListener("click", () => setModalityFilter("all"));
+        filtersEl.appendChild(allBtn);
+        modalities.forEach(m => {
+          const btn = document.createElement("button");
+          btn.className = "modality-filter";
+          btn.dataset.modality = m;
+          const dot = document.createElement("span");
+          dot.className = "modality-dot " + m;
+          dot.style.marginRight = "4px";
+          btn.appendChild(dot);
+          btn.appendChild(document.createTextNode(m.charAt(0).toUpperCase() + m.slice(1)));
+          btn.addEventListener("click", () => setModalityFilter(m));
+          filtersEl.appendChild(btn);
+        });
+      }
+
+      renderFilteredResults();
+      el.scrollIntoView({ behavior: "smooth", block: "start" });
+    }
+
+    function setModalityFilter(filter) {
+      activeModalityFilter = filter;
+      document.querySelectorAll(".modality-filter").forEach(b => {
+        if (filter === "all") {
+          b.classList.toggle("active", !b.dataset.modality);
+        } else {
+          b.classList.toggle("active", b.dataset.modality === filter);
+        }
+      });
+      renderFilteredResults();
+    }
+
+    function renderFilteredResults() {
+      if (!searchResultsData) return;
+      const list = document.getElementById("searchResultsList");
       list.textContent = "";
-      data.results.forEach(r => {
+
+      const filtered = activeModalityFilter === 'all'
+        ? searchResultsData.results
+        : searchResultsData.results.filter(r => r.modality === activeModalityFilter);
+
+      filtered.forEach((r, i) => {
         const color = simColor(r.score);
         const pct = Math.max(0, Math.min(100, r.score * 100));
         const ext = r.filename.split(".").pop().toLowerCase();
@@ -1207,13 +1284,11 @@
         const card = document.createElement("div");
         card.className = "search-result-card";
 
-        // Rank
         const rank = document.createElement("div");
         rank.className = "result-rank";
-        rank.textContent = "#" + r.rank;
+        rank.textContent = "#" + (i + 1);
         card.appendChild(rank);
 
-        // Preview
         const preview = document.createElement("div");
         preview.className = "result-preview";
         if (isImage) {
@@ -1231,7 +1306,6 @@
         }
         card.appendChild(preview);
 
-        // Info
         const info = document.createElement("div");
         info.className = "result-info";
         const fname = document.createElement("div");
@@ -1252,7 +1326,6 @@
         info.appendChild(bar);
         card.appendChild(info);
 
-        // Score
         const score = document.createElement("div");
         score.className = "result-score";
         score.style.color = color;
@@ -1261,8 +1334,6 @@
 
         list.appendChild(card);
       });
-
-      el.scrollIntoView({ behavior: "smooth", block: "start" });
     }
 
     // ── Boot ──
